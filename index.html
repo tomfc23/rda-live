@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Player Scores 3</title>
+  <title>Player Scores 4</title>
   <style>
     body { font-family: Arial; background: #f9f9f9; padding: 20px; }
     .team { margin-bottom: 20px; }
@@ -32,10 +32,16 @@
       return res.json();
     }
 
-    function parseRank(rawRank) {
+    function parseRankNumber(rawRank) {
       if (!rawRank) return Infinity;
       const match = rawRank.replace(/,/g, '').match(/(\d+)/);
       return match ? parseInt(match[1], 10) : Infinity;
+    }
+
+    function simplifyRank(rawRank) {
+      if (!rawRank) return 'N/A';
+      const clipped = rawRank.split(' of')[0];
+      return clipped.trim();
     }
 
     function formatNumber(num) {
@@ -71,13 +77,14 @@
             const rankRaw = rankInfo.rankDisplay ?? '';
 
             const score = parseFloat(scoreRaw) || 0;
-            const rankNum = parseRank(rankRaw);
+            const rankNum = parseRankNumber(rankRaw);
+            const rankDisplay = simplifyRank(rankRaw);
 
             teams[teamName].push({
               username,
               score,
               scoreDisplay: score.toFixed(2),
-              rankDisplay: formatNumber(rankNum),
+              rankDisplay,
               rankNum
             });
 
