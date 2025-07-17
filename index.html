@@ -9,7 +9,7 @@
   </style>
 </head>
 <body>
-  <h1>Player Scores</h1>
+  <h1>Player Scores 2</h1>
   <div id="results">Loading...</div>
 
   <script>
@@ -25,7 +25,7 @@
     async function fetchPlayerData(draftId, userId) {
       const url = `http://api.real.vg/games/playerratingcontest/${draftId}/view/${userId}?contestType=sport`;
       const res = await fetch(corsProxy + url);
-      if (!res.ok) throw new Error('API error');
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     }
 
@@ -33,8 +33,8 @@
       const resultsDiv = document.getElementById('results');
       try {
         const csv = await fetchCSV(csvUrl);
-        const draftId = csv[0][1]; // From header row: draft id,728,,
-        const players = csv.slice(2).filter(row => row[0] && row[1]); // Skip headers
+        const draftId = csv[0][1]; // From header row
+        const players = csv.slice(2).filter(row => row[0] && row[1]);
 
         resultsDiv.textContent = '';
 
@@ -46,16 +46,26 @@
 
           try {
             const data = await fetchPlayerData(draftId, userId);
-            const rankInfo = data.rankDisplayInfos?.[0];
-            const score = rankInfo?.scoreDisplay ?? 'N/A';
-            const rank = rankInfo?.rankDisplay ?? 'N/A';
-            display.textContent = `${username} - ${score} - ${rank}`;
+            console.log(`Data for ${username}:`, data);
+
+            const rankInfo = data.info?.rankDisplayInfos?.[0];
+
+            if (rankInfo) {
+              const score = rankInfo.scoreDisplay || 'N/A';
+              const rank = rankInfo.rankDisplay || 'N/A';
+              display.textContent = `${username} - ${score} - ${rank}`;
+            } else {
+              display.textContent = `${username} - no rank info`;
+            }
+
           } catch (e) {
-            display.textContent = `${username} - failed to fetch`;
+            console.error(`Error fetching data for ${username}:`, e);
+            display.textContent = `${username} - fetch failed`;
           }
         }
 
       } catch (e) {
+        console.error('Main fetch failed:', e);
         resultsDiv.textContent = 'Failed to load CSV or API.';
       }
     }
