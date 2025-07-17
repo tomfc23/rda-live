@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Player Scores</title>
+  <title>Player Scores 3</title>
   <style>
     body { font-family: Arial; background: #f9f9f9; padding: 20px; }
-    .player { margin-bottom: 8px; }
+    .team { margin-bottom: 20px; }
+    .team h2 { margin-bottom: 5px; }
+    .player { margin-left: 10px; margin-bottom: 4px; }
+    .total { font-weight: bold; margin-left: 10px; }
   </style>
 </head>
 <body>
-  <h1>Player Scores 2</h1>
+  <h1>Player Scores by Team</h1>
   <div id="results">Loading...</div>
 
   <script>
@@ -29,39 +32,96 @@
       return res.json();
     }
 
+    function parseRank(rawRank) {
+      if (!rawRank) return Infinity;
+      const match = rawRank.replace(/,/g, '').match(/(\d+)/);
+      return match ? parseInt(match[1], 10) : Infinity;
+    }
+
+    function formatNumber(num) {
+      return num.toLocaleString();
+    }
+
     async function main() {
       const resultsDiv = document.getElementById('results');
       try {
         const csv = await fetchCSV(csvUrl);
-        const draftId = csv[0][1]; // From header row
-        const players = csv.slice(2).filter(row => row[0] && row[1]);
+        const draftId = csv[0][1];
+        const playersRaw = csv.slice(2)
+          .filter(row => row[0] && row[1] && (row[3] || '').toLowerCase() === 'yes');
+
+        const teams = {};
 
         resultsDiv.textContent = '';
 
-        for (const [username, userId] of players) {
+        for (const row of playersRaw) {
+          const [username, userId, teamName] = row;
+
+          if (!teams[teamName]) teams[teamName] = [];
+
           const display = document.createElement('div');
-          display.className = 'player';
           display.textContent = `${username} - loading...`;
           resultsDiv.appendChild(display);
 
           try {
             const data = await fetchPlayerData(draftId, userId);
-            console.log(`Data for ${username}:`, data);
+            const rankInfo = data.info?.rankDisplayInfos?.[0] ?? {};
 
-            const rankInfo = data.info?.rankDisplayInfos?.[0];
+            const scoreRaw = rankInfo.scoreDisplay ?? '0';
+            const rankRaw = rankInfo.rankDisplay ?? '';
 
-            if (rankInfo) {
-              const score = rankInfo.scoreDisplay || 'N/A';
-              const rank = rankInfo.rankDisplay || 'N/A';
-              display.textContent = `${username} - ${score} - ${rank}`;
-            } else {
-              display.textContent = `${username} - no rank info`;
-            }
+            const score = parseFloat(scoreRaw) || 0;
+            const rankNum = parseRank(rankRaw);
+
+            teams[teamName].push({
+              username,
+              score,
+              scoreDisplay: score.toFixed(2),
+              rankDisplay: formatNumber(rankNum),
+              rankNum
+            });
 
           } catch (e) {
-            console.error(`Error fetching data for ${username}:`, e);
-            display.textContent = `${username} - fetch failed`;
+            teams[teamName].push({
+              username,
+              score: 0,
+              scoreDisplay: '0.00',
+              rankDisplay: 'N/A',
+              rankNum: Infinity
+            });
           }
+        }
+
+        // Clear placeholder loading div
+        resultsDiv.innerHTML = '';
+
+        // Render teams
+        for (const [teamName, players] of Object.entries(teams)) {
+          players.sort((a, b) => a.rankNum - b.rankNum);
+
+          const teamDiv = document.createElement('div');
+          teamDiv.className = 'team';
+
+          const header = document.createElement('h2');
+          header.textContent = teamName;
+          teamDiv.appendChild(header);
+
+          let teamTotal = 0;
+
+          players.forEach(player => {
+            const playerDiv = document.createElement('div');
+            playerDiv.className = 'player';
+            playerDiv.textContent = `${player.username} - ${player.scoreDisplay} - ${player.rankDisplay}`;
+            teamDiv.appendChild(playerDiv);
+            teamTotal += player.score;
+          });
+
+          const totalDiv = document.createElement('div');
+          totalDiv.className = 'total';
+          totalDiv.textContent = `Team Total: ${teamTotal.toFixed(2)}`;
+          teamDiv.appendChild(totalDiv);
+
+          resultsDiv.appendChild(teamDiv);
         }
 
       } catch (e) {
