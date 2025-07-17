@@ -2,60 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Player Scores</title>
+  <title>RDA Live</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-   body {
-  font-family: Arial, sans-serif;
-  background-color: #0A1B2A; /* deep navy */
-  color: #EAC76F; /* soft gold */
-  padding: 20px;
-}
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #0A1B2A;
+      color: #EAC76F;
+      margin: 0;
+      padding: 15px;
+    }
 
-h1 {
-  font-size: 24px;
-  color: #FFD700; /* brighter gold */
-  margin-bottom: 20px;
-}
+    h1 {
+      font-size: 20px;
+      color: #FFD700;
+      text-align: center;
+      margin-bottom: 20px;
+    }
 
-.team {
-  border: 1px solid #FFD700;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 25px;
-  background-color: #0F2236;
-}
+    .matchup {
+      background-color: #0F2236;
+      border: 2px solid #FFD700;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      padding: 10px;
+    }
 
-.team h2 {
-  font-size: 20px;
-  color: #FFD700;
-  border-bottom: 1px solid #FFD700;
-  padding-bottom: 5px;
-  margin-bottom: 10px;
-}
+    .matchup h2 {
+      font-size: 16px;
+      color: #FFD700;
+      text-align: center;
+      margin-bottom: 8px;
+    }
 
-.player {
-  font-size: 16px;
-  color: #FFFFFF; /* white text for readability */
-  margin-left: 10px;
-  margin-bottom: 4px;
-}
+    .team {
+      background-color: #142A42;
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
 
-.total {
-  font-weight: bold;
-  font-size: 16px;
-  color: #EAC76F;
-  margin-left: 10px;
-  margin-top: 10px;
-}
+    .team h3 {
+      font-size: 14px;
+      color: #FFD700;
+      margin-bottom: 5px;
+    }
 
-#results {
-  max-width: 600px;
-  margin: 0 auto;
-}
+    .player {
+      font-size: 14px;
+      color: #FFFFFF;
+      margin-left: 10px;
+      margin-bottom: 4px;
+    }
+
+    #results {
+      max-width: 600px;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>
-  <h1>Player Scores worker fix</h1>
+  <h1>RDA Live</h1>
   <div id="results">Loading...</div>
 
   <script>
@@ -88,11 +95,9 @@ h1 {
       const nowEST = new Date(nowUTC.getTime() - (5 * 60 * 60 * 1000));
       const currentHour = nowEST.getHours();
       const currentDate = new Date(nowEST);
-
       if (currentHour < 3) {
         currentDate.setDate(currentDate.getDate() - 1);
       }
-
       const month = currentDate.getMonth() + 1;
       const day = currentDate.getDate();
       return `${month}/${day}`;
@@ -110,10 +115,6 @@ h1 {
       return clipped.trim();
     }
 
-    function formatNumber(num) {
-      return num.toLocaleString();
-    }
-
     async function main() {
       const resultsDiv = document.getElementById('results');
       try {
@@ -123,12 +124,12 @@ h1 {
         ]);
 
         const todayDateString = getCurrentDateStringEST();
-        const todaysTeams = new Set();
+
+        const matchups = [];
         scheduleCsv.slice(1).forEach(row => {
           const [gameId, date, team1, team2] = row;
           if (date === todayDateString) {
-            if (team1) todaysTeams.add(team1);
-            if (team2) todaysTeams.add(team2);
+            matchups.push({ team1, team2 });
           }
         });
 
@@ -141,12 +142,7 @@ h1 {
 
         for (const row of playersRaw) {
           const [username, userId, teamName] = row;
-          if (!todaysTeams.has(teamName)) continue;
           if (!teams[teamName]) teams[teamName] = [];
-
-          const display = document.createElement('div');
-          display.textContent = `${username} - loading...`;
-          resultsDiv.appendChild(display);
 
           try {
             const url = `http://api.real.vg/games/playerratingcontest/${draftId}/view/${userId}?contestType=sport`;
@@ -177,39 +173,53 @@ h1 {
           }
         }
 
-        resultsDiv.innerHTML = '';
-
-        if (Object.keys(teams).length === 0) {
+        if (matchups.length === 0) {
           resultsDiv.textContent = 'No scheduled games today.';
           return;
         }
 
-        for (const [teamName, players] of Object.entries(teams)) {
-          players.sort((a, b) => a.rankNum - b.rankNum);
-          const teamDiv = document.createElement('div');
-          teamDiv.className = 'team';
-          const header = document.createElement('h2');
-          header.textContent = teamName;
-          teamDiv.appendChild(header);
+        for (const matchup of matchups) {
+          const { team1, team2 } = matchup;
 
-          let teamTotal = 0;
-          players.forEach(player => {
-            const playerDiv = document.createElement('div');
-            playerDiv.className = 'player';
-            playerDiv.textContent = `${player.username} - ${player.scoreDisplay} - ${player.rankDisplay}`;
-            teamDiv.appendChild(playerDiv);
-            teamTotal += player.score;
-          });
+          const team1Players = teams[team1] || [];
+          const team2Players = teams[team2] || [];
 
-          const totalDiv = document.createElement('div');
-          totalDiv.className = 'total';
-          totalDiv.textContent = `Team Total: ${teamTotal.toFixed(2)}`;
-          teamDiv.appendChild(totalDiv);
-          resultsDiv.appendChild(teamDiv);
+          const team1Total = team1Players.reduce((sum, p) => sum + p.score, 0).toFixed(2);
+          const team2Total = team2Players.reduce((sum, p) => sum + p.score, 0).toFixed(2);
+
+          const matchupDiv = document.createElement('div');
+          matchupDiv.className = 'matchup';
+
+          const matchupHeader = document.createElement('h2');
+          matchupHeader.textContent = `${team1} (${team1Total}) vs ${team2} (${team2Total})`;
+          matchupDiv.appendChild(matchupHeader);
+
+          function renderTeam(teamName, players) {
+            const teamDiv = document.createElement('div');
+            teamDiv.className = 'team';
+            const teamHeader = document.createElement('h3');
+            teamHeader.textContent = teamName;
+            teamDiv.appendChild(teamHeader);
+
+            players.sort((a, b) => a.rankNum - b.rankNum);
+            players.forEach(player => {
+              const playerDiv = document.createElement('div');
+              playerDiv.className = 'player';
+              playerDiv.textContent = `${player.username} - ${player.scoreDisplay} - ${player.rankDisplay}`;
+              teamDiv.appendChild(playerDiv);
+            });
+
+            matchupDiv.appendChild(teamDiv);
+          }
+
+          renderTeam(team1, team1Players);
+          renderTeam(team2, team2Players);
+
+          resultsDiv.appendChild(matchupDiv);
         }
 
       } catch (e) {
-        console.error('Main fetch failed:', e);
+        console.error('Fetch failed:', e);
         resultsDiv.textContent = 'Failed to load CSV or API.';
       }
     }
