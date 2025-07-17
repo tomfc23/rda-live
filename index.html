@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Player Scores 4</title>
+  <title>Player Scores 5</title>
   <style>
     body { font-family: Arial; background: #f9f9f9; padding: 20px; }
     .team { margin-bottom: 20px; }
@@ -17,7 +17,9 @@
 
   <script>
     const corsProxy = 'https://corsproxy.io/?';
-    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR7pZmpj4lJiBMkcjcgzJ77n2xmFIRlmuD-0Zuakz8lZekYobXkmTjfaEwhJYdNuM5F9VKlDm-FPaw8/pub?output=csv';
+
+    const playersCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR7pZmpj4lJiBMkcjcgzJ77n2xmFIRlmuD-0Zuakz8lZekYobXkmTjfaEwhJYdNuM5F9VKlDm-FPaw8/pub?output=csv';
+    const scheduleCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS93Cbk4JUmCBgtIR1-RnSHlYY9E-dxEEWVT_Jx-T_Lm07oa6KYlnBGAqaGJin4VBpG4GmOGn8ktTPy/pub?output=csv';
 
     async function fetchCSV(url) {
       const res = await fetch(corsProxy + url);
@@ -25,11 +27,22 @@
       return text.split('\n').map(line => line.split(',').map(x => x.trim()));
     }
 
-    async function fetchPlayerData(draftId, userId) {
-      const url = `http://api.real.vg/games/playerratingcontest/${draftId}/view/${userId}?contestType=sport`;
-      const res = await fetch(corsProxy + url);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
+    function getCurrentDateStringEST() {
+      const nowUTC = new Date();
+      const nowEST = new Date(nowUTC.getTime() - (5 * 60 * 60 * 1000)); // UTC-5 for EST
+
+      const currentHour = nowEST.getHours();
+      const currentDate = new Date(nowEST);
+
+      if (currentHour < 3) {
+        // Before 3 AM, treat as previous day
+        currentDate.setDate(currentDate.getDate() - 1);
+      }
+
+      const month = currentDate.getMonth() + 1;
+      const day = currentDate.getDate();
+
+      return `${month}/${day}`;
     }
 
     function parseRankNumber(rawRank) {
@@ -51,7 +64,23 @@
     async function main() {
       const resultsDiv = document.getElementById('results');
       try {
-        const csv = await fetchCSV(csvUrl);
+        const [csv, scheduleCsv] = await Promise.all([
+          fetchCSV(playersCsvUrl),
+          fetchCSV(scheduleCsvUrl)
+        ]);
+
+        const todayDateString = getCurrentDateStringEST();
+
+        // Find today's teams from schedule
+        const todaysTeams = new Set();
+        scheduleCsv.slice(1).forEach(row => {
+          const [gameId, date, team1, team2] = row;
+          if (date === todayDateString) {
+            if (team1) todaysTeams.add(team1);
+            if (team2) todaysTeams.add(team2);
+          }
+        });
+
         const draftId = csv[0][1];
         const playersRaw = csv.slice(2)
           .filter(row => row[0] && row[1] && (row[3] || '').toLowerCase() === 'yes');
@@ -63,6 +92,10 @@
         for (const row of playersRaw) {
           const [username, userId, teamName] = row;
 
+          if (!todaysTeams.has(teamName)) {
+            continue; // Skip teams not playing today
+          }
+
           if (!teams[teamName]) teams[teamName] = [];
 
           const display = document.createElement('div');
@@ -70,7 +103,9 @@
           resultsDiv.appendChild(display);
 
           try {
-            const data = await fetchPlayerData(draftId, userId);
+            const url = `http://api.real.vg/games/playerratingcontest/${draftId}/view/${userId}?contestType=sport`;
+            const res = await fetch(corsProxy + url);
+            const data = await res.json();
             const rankInfo = data.info?.rankDisplayInfos?.[0] ?? {};
 
             const scoreRaw = rankInfo.scoreDisplay ?? '0';
@@ -101,6 +136,11 @@
 
         // Clear placeholder loading div
         resultsDiv.innerHTML = '';
+
+        if (Object.keys(teams).length === 0) {
+          resultsDiv.textContent = 'No scheduled games today.';
+          return;
+        }
 
         // Render teams
         for (const [teamName, players] of Object.entries(teams)) {
