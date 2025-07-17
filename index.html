@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>RDA Live</title>
+  <title>Player Scores - RDA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body {
@@ -14,7 +14,7 @@
     }
 
     h1 {
-      font-size: 20px;
+      font-size: 24px;
       color: #FFD700;
       text-align: center;
       margin-bottom: 20px;
@@ -59,11 +59,24 @@
       max-width: 600px;
       margin: 0 auto;
     }
+
+    .win {
+      color: #00FF00;
+      font-weight: bold;
+      margin-left: 5px;
+    }
+
+    .loss {
+      color: #FF5555;
+      font-weight: bold;
+      margin-left: 5px;
+    }
   </style>
 </head>
 <body>
-  <h1>RDA Live</h1>
-  <div id="results">Loading...</div>
+  <h1>RDA Player Scores</h1>
+  <div id="loading">Loading...</div>
+  <div id="results"></div>
 
   <script>
     const workerProxy = 'https://rda-worker.tomfconreal.workers.dev/?url=';
@@ -117,6 +130,7 @@
 
     async function main() {
       const resultsDiv = document.getElementById('results');
+      const loadingDiv = document.getElementById('loading');
       try {
         const [csv, scheduleCsv] = await Promise.all([
           fetchCSV(playersCsvUrl),
@@ -138,6 +152,9 @@
           .filter(row => row[0] && row[1] && (row[3] || '').toLowerCase() === 'yes');
 
         const teams = {};
+        let loadedPlayers = 0;
+        const totalPlayers = playersRaw.length;
+
         resultsDiv.textContent = '';
 
         for (const row of playersRaw) {
@@ -171,7 +188,12 @@
               rankNum: Infinity
             });
           }
+
+          loadedPlayers++;
+          loadingDiv.textContent = `Loaded ${loadedPlayers} out of ${totalPlayers} players...`;
         }
+
+        loadingDiv.style.display = 'none';
 
         if (matchups.length === 0) {
           resultsDiv.textContent = 'No scheduled games today.';
@@ -187,11 +209,14 @@
           const team1Total = team1Players.reduce((sum, p) => sum + p.score, 0).toFixed(2);
           const team2Total = team2Players.reduce((sum, p) => sum + p.score, 0).toFixed(2);
 
+          const team1IsWinner = parseFloat(team1Total) > parseFloat(team2Total);
+          const team2IsWinner = !team1IsWinner;
+
           const matchupDiv = document.createElement('div');
           matchupDiv.className = 'matchup';
 
           const matchupHeader = document.createElement('h2');
-          matchupHeader.textContent = `${team1} (${team1Total}) vs ${team2} (${team2Total})`;
+          matchupHeader.innerHTML = `${team1} (${team1Total}) <span class="${team1IsWinner ? 'win' : 'loss'}">${team1IsWinner ? 'W' : 'L'}</span> vs ${team2} (${team2Total}) <span class="${team2IsWinner ? 'win' : 'loss'}">${team2IsWinner ? 'W' : 'L'}</span>`;
           matchupDiv.appendChild(matchupHeader);
 
           function renderTeam(teamName, players) {
